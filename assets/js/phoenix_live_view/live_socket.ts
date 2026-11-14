@@ -374,7 +374,7 @@ export default class LiveSocket {
     this.outgoingMainEl = null;
     this.clickStartedAtTarget = null;
     this.linkRef = 1;
-    this.roots = {};
+    this.roots = Object.create(null);
     this.href = window.location.href;
     this.pendingLink = null;
     this.historyReservation = null;

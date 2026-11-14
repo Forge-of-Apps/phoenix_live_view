@@ -198,9 +198,9 @@ export default class View {
     this.pendingJoinOps = [];
     this.viewHooks = {};
     this.formSubmits = [];
-    this.children = this.parent ? null : {};
-    this.root.children![this.id] = {};
-    this.formsForRecovery = {};
+    this.children = this.parent ? null : Object.create(null);
+    this.root.children![this.id] = Object.create(null);
+    this.formsForRecovery = Object.create(null);
     this.channel = this.liveSocket.channel(`lv:${this.id}`, () => {
       const url = this.href && resolveURL(this.href);
       return {
@@ -949,7 +949,7 @@ export default class View {
     // They either all resolved or were abandoned
     this.pendingForms.clear();
     // we can also clear the formsForRecovery object to not keep old form elements around
-    this.formsForRecovery = {};
+    this.formsForRecovery = Object.create(null);
     this.joinCallback(() => {
       this.pendingJoinOps.forEach(([view, op]) => {
         if (!view.isDestroyed()) {
@@ -1962,7 +1962,10 @@ export default class View {
 
         return acc;
       },
-      { inputsUnused: {}, onlyHiddenInputs: {} },
+      {
+        inputsUnused: Object.create(null),
+        onlyHiddenInputs: Object.create(null),
+      },
     );
 
     const formSkipUnusedFields = form.hasAttribute(
@@ -2716,7 +2719,7 @@ export default class View {
     // as well as view.pushInput, which expects DOM elements.
 
     if (this.joinCount === 0) {
-      return {};
+      return Object.create(null);
     }
 
     const phxChange = this.binding("change");
@@ -2778,7 +2781,7 @@ export default class View {
       .reduce((acc, form) => {
         acc[form.id] = form;
         return acc;
-      }, {});
+      }, Object.create(null));
   }
 
   maybePushComponentsDestroyed(destroyedCIDs) {
