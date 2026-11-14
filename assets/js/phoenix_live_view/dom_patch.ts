@@ -77,8 +77,8 @@ export default class DOMPatch {
     this.rootID = view.root.id;
     this.html = html;
     this.streams = streams;
-    this.streamInserts = {};
-    this.streamComponentRestore = {};
+    this.streamInserts = Object.create(null);
+    this.streamComponentRestore = Object.create(null);
     this.targetCID = targetCID;
     this.pendingRemoves = [];
     this.phxRemove = this.liveSocket.binding("remove");

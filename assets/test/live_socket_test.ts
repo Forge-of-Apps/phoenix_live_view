@@ -546,6 +546,17 @@ describe("LiveSocket", () => {
     expect(liveSocket.roots).toEqual({});
   });
 
+  test.each(["constructor", "toString", "valueOf", "__proto__"])(
+    "joins a root LiveView with the id %s",
+    (id) => {
+      document.body.innerHTML = `<div id="${id}" data-phx-session="abc123"></div>`;
+      liveSocket = new LiveSocket("/live", Socket);
+      liveSocket.connect();
+
+      expect(liveSocket.getRootById(id)).toBeInstanceOf(View);
+    },
+  );
+
   test("binding", async () => {
     liveSocket = new LiveSocket("/live", Socket);
 

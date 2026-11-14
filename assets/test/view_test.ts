@@ -3219,3 +3219,167 @@ describe("DOM", function () {
     expect(target.id).toEqual("bar");
   });
 });
+
+describe("ids that name Object.prototype members", function () {
+  const ids = ["constructor", "toString", "valueOf", "__proto__"];
+  let liveSocket;
+
+  beforeEach(() => {
+    global.document.body.innerHTML = liveViewDOM().outerHTML;
+  });
+
+  afterEach(() => {
+    liveSocket && liveSocket.destroyAllViews();
+    liveSocket = null;
+  });
+
+  afterAll(() => {
+    global.document.body.innerHTML = "";
+  });
+
+  test.each(ids)("patches in an element with the id %s", (id) => {
+    liveSocket = new LiveSocket("/live", Socket);
+    const view = simulateJoinedView(liveViewDOM("<p>hi</p>"), liveSocket);
+
+    view.update({ s: [`<p>hi</p><div id="${id}">x</div>`] }, []);
+
+    expect(document.getElementById(id)!.textContent).toBe("x");
+  });
+
+  test.each(ids)("discards a deleted stream item with the id %s", (id) => {
+    let destroyed = false;
+    liveSocket = new LiveSocket("/live", Socket, {
+      hooks: {
+        Item: {
+          destroyed() {
+            destroyed = true;
+          },
+        },
+      },
+    });
+    const view = simulateJoinedView(liveViewDOM("<p>hi</p>"), liveSocket);
+
+    view.update(
+      {
+        s: ['<div id="items" phx-update="stream">', "</div>"],
+        0: {
+          s: ['<div id="', '" phx-hook="Item"></div>'],
+          k: { 0: { 0: id }, kc: 1 },
+          stream: ["0", [[id, -1, null, false]], [], false],
+        },
+      },
+      [],
+    );
+    expect(document.getElementById(id)).not.toBeNull();
+
+    view.update({ 0: { k: { kc: 0 }, stream: ["0", [], [id], false] } }, []);
+
+    expect(document.getElementById(id)).toBeNull();
+    expect(destroyed).toBe(true);
+  });
+
+  test.each(ids)("joins a child LiveView with the id %s", (id) => {
+    liveSocket = new LiveSocket("/live", Socket);
+    const view = simulateJoinedView(
+      liveViewDOM(
+        `<div id="${id}" data-phx-session="abc456" data-phx-parent-id="container"></div>`,
+      ),
+      liveSocket,
+    );
+
+    expect(view.getChildById(id)).toBeInstanceOf(View);
+  });
+
+  test("destroys the child LiveView of a LiveView with the id __proto__", () => {
+    liveSocket = new LiveSocket("/live", Socket);
+    const el = liveViewDOM(
+      '<div id="child" data-phx-session="abc456" data-phx-parent-id="__proto__"></div>',
+    );
+    el.id = "__proto__";
+    const view = simulateJoinedView(el, liveSocket);
+    const child = view.getChildById("child");
+
+    liveSocket.destroyViewByEl(document.getElementById("child"));
+
+    expect(child.isDestroyed()).toBe(true);
+  });
+
+  test.each(ids)("joins with a form with the id %s", (id) => {
+    liveSocket = new LiveSocket("/live", Socket);
+    const view = simulateJoinedView(
+      liveViewDOM(
+        `<form id="${id}" phx-change="validate"><input name="foo"></form>`,
+      ),
+      liveSocket,
+    );
+
+    expect(view.isJoinPending()).toBe(false);
+    expect(document.getElementById(id)).toBeInstanceOf(HTMLFormElement);
+  });
+
+  test.each(ids)(
+    "joins a child LiveView with a form with the id %s once its parent joined",
+    (id) => {
+      liveSocket = new LiveSocket("/live", Socket);
+      const view = simulateJoinedView(liveViewDOM("<p>hi</p>"), liveSocket);
+      view.update(
+        {
+          s: [
+            '<div id="child" data-phx-session="abc456" data-phx-parent-id="container"></div>',
+          ],
+        },
+        [],
+      );
+      const child = view.getChildById("child");
+      stubChannel(child);
+
+      child.onJoin({
+        rendered: {
+          s: [
+            `<form id="${id}" phx-change="validate"><input name="foo"></form>`,
+          ],
+        },
+        liveview_version,
+      });
+
+      expect(child.isJoinPending()).toBe(false);
+      expect(document.getElementById(id)).toBeInstanceOf(HTMLFormElement);
+    },
+  );
+
+  test("recovers a form with the id __proto__ and no form that is new", () => {
+    liveSocket = new LiveSocket("/live", Socket);
+    const form =
+      '<form id="__proto__" phx-change="validate"><input name="foo"></form>';
+    const view = new View(liveViewDOM(form), liveSocket, null, null, null);
+    view["joinCount"] = 1;
+    view["formsForRecovery"] = view.getFormsForRecovery();
+    const pushFormRecovery = jest
+      .spyOn(view, "pushFormRecovery")
+      .mockImplementation((_oldForm, _newForm, _templateDom, done) => done());
+    const callback = jest.fn();
+
+    view.maybeRecoverForms(
+      liveViewDOM(
+        form +
+          '<form id="constructor" phx-change="validate"><input name="bar"></form>',
+      ).outerHTML,
+      callback,
+    );
+
+    expect(pushFormRecovery).toHaveBeenCalledTimes(1);
+    expect(pushFormRecovery.mock.calls[0][1].id).toBe("__proto__");
+    expect(callback).toHaveBeenCalledTimes(1);
+  });
+
+  test("serializes an untouched input named __proto__ as unused", () => {
+    liveSocket = new LiveSocket("/live", Socket);
+    const view = simulateJoinedView(
+      liveViewDOM('<form id="form"><input name="__proto__" value="x"></form>'),
+      liveSocket,
+    );
+    const form = document.getElementById("form") as HTMLFormElement;
+
+    expect(view.serializeForm(form)).toBe("_unused___proto__=&__proto__=x");
+  });
+});
